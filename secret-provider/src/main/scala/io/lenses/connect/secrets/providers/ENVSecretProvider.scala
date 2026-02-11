@@ -11,11 +11,14 @@ import io.lenses.connect.secrets.connect.FILE_DIR
 import io.lenses.connect.secrets.connect.decode
 import io.lenses.connect.secrets.connect.decodeToBytes
 import io.lenses.connect.secrets.connect.fileWriter
+import io.github.cdimascio.dotenv.Dotenv
 import org.apache.kafka.common.config.ConfigData
 import org.apache.kafka.common.config.provider.ConfigProvider
 import org.apache.kafka.connect.errors.ConnectException
 
 import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util
 import scala.jdk.CollectionConverters._
 
@@ -27,6 +30,33 @@ class ENVSecretProvider extends ConfigProvider {
   private val BASE64_FILE = "(ENV-mounted-base64:)(.*$)".r
   private val UTF8_FILE   = "(ENV-mounted:)(.*$)".r
   private val BASE64      = "(ENV-base64:)(.*$)".r
+
+  private def loadEnvFile(path: String): Map[String, String] = {
+    val filePath = Paths.get(path)
+    if (!Files.exists(filePath)) {
+      throw new ConnectException(s"Configured env file [$path] does not exist")
+    }
+
+    val dir      = Option(filePath.getParent).map(_.toString).getOrElse(".")
+    val fileName = filePath.getFileName.toString
+
+    try {
+      val dotenv = Dotenv
+        .configure()
+        .directory(dir)
+        .filename(fileName)
+        .load()
+
+      dotenv
+        .entries(Dotenv.Filter.DECLARED_IN_ENV_FILE)
+        .asScala
+        .map(e => e.getKey -> e.getValue)
+        .toMap
+    } catch {
+      case exception: Exception =>
+        throw new ConnectException(s"Failed to read env file [$path]", exception)
+    }
+  }
 
   override def get(path: String): ConfigData =
     new ConfigData(Map.empty[String, String].asJava)
@@ -71,9 +101,10 @@ class ENVSecretProvider extends ConfigProvider {
   }
 
   override def configure(configs: util.Map[String, _]): Unit = {
-    vars = System.getenv().asScala.toMap
     val config = ENVProviderConfig(configs)
     fileDir = config.getString(FILE_DIR).stripSuffix(separator)
+    val envFile = config.getString(ENVProviderConfig.ENV_FILE).trim
+    vars = if (envFile.nonEmpty) loadEnvFile(envFile) else System.getenv().asScala.toMap
   }
 
   override def close(): Unit = {}
