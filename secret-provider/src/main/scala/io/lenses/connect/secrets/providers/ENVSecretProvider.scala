@@ -77,12 +77,20 @@ class ENVSecretProvider extends ConfigProvider {
           // the value metadata pattern
           envVarVal match {
             case BASE64_FILE(_, v) =>
+              if (fileDir.isEmpty)
+                throw new ConnectException(
+                  s"Failed to write [$key] to disk because file.dir is not set",
+                )
               //decode and write to file
               val fileName = s"$fileDir$separator${key.toLowerCase}"
               fileWriter(fileName, decodeToBytes(key, v), key)
               (key, fileName)
 
             case UTF8_FILE(_, v) =>
+              if (fileDir.isEmpty)
+                throw new ConnectException(
+                  s"Failed to write [$key] to disk because file.dir is not set",
+                )
               val fileName = s"$fileDir$separator${key.toLowerCase}"
               fileWriter(fileName, v.getBytes(), key)
               (key, fileName)

@@ -120,4 +120,20 @@ class ENVSecretProviderTest extends AnyWordSpec with Matchers {
       provider.get("", Set("PATH").asJava)
     }
   }
+
+  "should throw when file.dir is not set for file-backed values" in {
+    val provider = new ENVSecretProvider()
+    provider.vars = Map(
+      "BASE64_FILE" -> s"ENV-mounted-base64:${Base64.getEncoder.encodeToString("my-base64-secret".getBytes)}",
+      "UTF8_FILE"   -> "ENV-mounted:my-secret",
+    )
+
+    intercept[ConnectException] {
+      provider.get("", Set("BASE64_FILE").asJava)
+    }
+
+    intercept[ConnectException] {
+      provider.get("", Set("UTF8_FILE").asJava)
+    }
+  }
 }
